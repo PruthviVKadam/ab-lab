@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ipynb_checkpoints/
+
+# Virtualenv
+.venv/
+venv/
+env/
+
+# Secrets / local config
+.env
+.streamlit/secrets.toml
+
+# Large / downloaded data (bundled CSV is added explicitly with `git add -f` when ready)
+data/*.csv
+
+# OS / editor
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
