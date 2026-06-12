@@ -1,18 +1,20 @@
 # data/
 
-## Cookie Cats A/B test (for the Analyze tab)
-The Analyze tab will use the **Cookie Cats** mobile-game retention experiment:
-~90,000 real users, randomized to `gate_30` vs `gate_40`, with 1-day and 7-day retention.
+## Cookie Cats A/B test (used by the Analyze tab)
 
-**Download:** Kaggle — search "Cookie Cats A/B testing" (e.g. dataset `yufengsui/mobile-games-ab-testing`).
-Accept the dataset terms once, then place the CSV here as `cookie_cats.csv`.
+`cookie_cats.csv` is **bundled in this repo** (committed with `git add -f`, ~2.6 MB) so the
+deployed app works out of the box. It is the **Cookie Cats** mobile-game retention experiment:
+90,189 real players randomized to `gate_30` vs `gate_40`, with 1-day and 7-day retention.
 
-This folder's CSVs are gitignored by default. When you're ready to bundle the dataset
-with the app for deployment, add it explicitly:
+Columns: `userid`, `version` (`gate_30` | `gate_40`), `sum_gamerounds`, `retention_1` (bool),
+`retention_7` (bool).
 
-```bash
-git add -f data/cookie_cats.csv
-```
+### Provenance
 
-Keep it under 10 MB (the raw Cookie Cats file is ~4 MB, well within limits).
+Public dataset, originally a DataCamp project, also on
+[Kaggle](https://www.kaggle.com/datasets/mursideyarkin/mobile-games-ab-testing-cookie-cats).
+This copy was fetched from a public GitHub mirror
+([ryanschaub/Mobile-Games-A-B-Testing-with-Cookie-Cats](https://github.com/ryanschaub/Mobile-Games-A-B-Testing-with-Cookie-Cats))
+and validated on download: shape `(90189, 5)`, expected columns, no nulls, no duplicate `userid`.
+
 **Never modify the raw file** — do any cleaning in code.

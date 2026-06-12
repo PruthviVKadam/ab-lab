@@ -4,12 +4,10 @@ Validated against (a) a fully hand-computed example and (b) the statsmodels
 reference implementation.
 """
 
-import math
-
 import pytest
-from statsmodels.stats.proportion import proportions_ztest
+from statsmodels.stats.proportion import proportion_confint, proportions_ztest
 
-from stats.tests import two_proportion_ztest
+from stats.tests import proportion_ci, two_proportion_ztest
 
 
 def test_hand_computed_example():
@@ -76,3 +74,23 @@ def test_invalid_inputs_raise(args):
 def test_invalid_alternative_raises():
     with pytest.raises(ValueError):
         two_proportion_ztest(200, 1000, 240, 1000, alternative="nope")
+
+
+def test_proportion_ci_matches_statsmodels_normal():
+    lo, hi = proportion_ci(240, 1000, alpha=0.05)
+    sm_lo, sm_hi = proportion_confint(240, 1000, alpha=0.05, method="normal")
+    assert lo == pytest.approx(sm_lo, abs=1e-9)
+    assert hi == pytest.approx(sm_hi, abs=1e-9)
+
+
+def test_proportion_ci_is_clipped_to_unit_interval():
+    lo, hi = proportion_ci(0, 50)            # p_hat = 0 -> SE 0, low must not go negative
+    assert lo == 0.0
+    lo2, hi2 = proportion_ci(50, 50)         # p_hat = 1 -> high must not exceed 1
+    assert hi2 == 1.0
+
+
+@pytest.mark.parametrize("args", [(5, 0), (-1, 10), (11, 10)])
+def test_proportion_ci_invalid_inputs_raise(args):
+    with pytest.raises(ValueError):
+        proportion_ci(*args)

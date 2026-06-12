@@ -47,6 +47,21 @@ class ABResult:
         return f"Statistically significant {direction} (p={self.p_value:.4f})."
 
 
+def proportion_ci(successes: int, n: int, alpha: float = 0.05) -> tuple[float, float]:
+    """Wald (normal-approximation) confidence interval for a single proportion.
+
+    Returns (low, high), clipped to [0, 1]. Used for per-variant error bars.
+    """
+    if n <= 0:
+        raise ValueError("n must be positive.")
+    if not 0 <= successes <= n:
+        raise ValueError("successes must satisfy 0 <= successes <= n.")
+    p = successes / n
+    se = math.sqrt(p * (1 - p) / n)
+    z_crit = stats.norm.ppf(1 - alpha / 2)
+    return (max(0.0, p - z_crit * se), min(1.0, p + z_crit * se))
+
+
 def two_proportion_ztest(
     successes_a: int,
     n_a: int,
