@@ -14,7 +14,8 @@ theory into something you can drive live.
   early, and ignoring variance reduction all lead to bad ship decisions.
 - **Approach:** A three-tab tool. **Design** computes the sample size you need (and shows the
   cost of detecting smaller effects); **Analyze** runs a two-proportion z-test on a real 90K-user
-  experiment, an uploaded CSV, or manual counts; **Pitfalls** (next) simulates peeking and CUPED.
+  experiment, an uploaded CSV, or manual counts; **Pitfalls** simulates how peeking inflates false
+  positives and how CUPED cuts variance.
 - **Result:** Every statistic is a pure, unit-tested function cross-checked against statsmodels
   and hand-computed values — so the numbers on screen are trustworthy.
 
@@ -24,7 +25,7 @@ theory into something you can drive live.
 | --- | --- |
 | **Design** — sample-size calculator + sensitivity curve | ✅ Live |
 | **Analyze** — two-proportion z-test on Cookie Cats / CSV upload / manual counts | ✅ Live |
-| **Pitfalls** — peeking simulator + CUPED demo | 🚧 Stats done & tested (`stats/cuped.py`); UI pending |
+| **Pitfalls** — peeking/early-stopping simulator + CUPED demo | ✅ Live |
 
 ## What the Analyze tab shows (real Cookie Cats output)
 
@@ -41,6 +42,15 @@ verbatim from the app output:
 Takeaway: moving the gate to level 40 **hurt** 7-day retention — a clean example of a
 statistically significant result that argues *against* shipping.
 
+## What the Pitfalls tab shows
+
+Both demos are Monte-Carlo (seeded, reproducible). Example output at α = 0.05:
+
+- **Peeking:** under the null (no real effect), testing once gives a **5.0%** false-positive rate,
+  but stopping early whenever p < α inflates it to **~18.7% at 10 looks** and **~24.4% at 20 looks**.
+- **CUPED:** a pre-experiment covariate of correlation ρ shrinks the effect estimate's standard
+  error by ~√(1 − ρ²) without bias — e.g. **ρ = 0.6 → ~20% smaller SE**, **ρ = 0.9 → ~56% smaller**.
+
 ## Run locally
 
 ```bash
@@ -56,11 +66,11 @@ streamlit run app.py
 python -m pytest
 ```
 
-The suite (43 tests) validates power analysis against an independent textbook sample-size
+The suite (59 tests) validates power analysis against an independent textbook sample-size
 formula, the two-proportion z-test against `statsmodels.proportions_ztest` and a hand-computed
-example, the aggregation helper against the bundled Cookie Cats counts, and CUPED against the
-`1 − corr²` variance-reduction identity. A headless `streamlit.testing` smoke test exercises the
-app across tabs and data sources.
+example, the aggregation helper against the bundled Cookie Cats counts, CUPED against the
+`1 − corr²` variance-reduction identity, and the peeking simulator's false-positive rate against
+its nominal α. A headless `streamlit.testing` smoke test exercises every tab and data source.
 
 ## Project layout
 
@@ -69,7 +79,8 @@ app.py                # UI only — no statistics inline
 stats/power.py        # sample size, achieved power, sensitivity curve
 stats/tests.py        # two-proportion z-test (pooled), per-group CI, plain-English verdict
 stats/aggregate.py    # tidy dataframe -> per-variant success/trial counts
-stats/cuped.py        # CUPED variance reduction
+stats/cuped.py        # CUPED variance reduction + simulated demo
+stats/peeking.py      # Monte-Carlo peeking / early-stopping false-positive simulator
 tests/                # pytest suite (textbook / reference cross-checks)
 data/cookie_cats.csv  # bundled experiment (90,189 rows)
 ```

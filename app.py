@@ -1,7 +1,7 @@
 """Experimentation Lab — A/B Test Designer & Analyzer.
 
 UI only. All statistics live in the `stats/` package (pure, unit-tested).
-Tabs: Design (live) · Analyze (live) · Pitfalls (roadmap).
+Tabs: Design (live) · Analyze (live) · Pitfalls (live).
 """
 
 from pathlib import Path
@@ -11,6 +11,8 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from stats.aggregate import available_groups, summarize_binary_experiment
+from stats.cuped import cuped_demo
+from stats.peeking import peeking_fpr_curve, run_peeking_simulation
 from stats.power import power_for_sample_size, required_sample_size, sensitivity_curve
 from stats.tests import proportion_ci, two_proportion_ztest
 
@@ -25,6 +27,21 @@ DATA_PATH = Path(__file__).parent / "data" / "cookie_cats.csv"
 @st.cache_data
 def load_cookie_cats() -> pd.DataFrame:
     return pd.read_csv(DATA_PATH)
+
+
+@st.cache_data
+def cached_peeking(true_rate, n_per_group, n_looks, alpha, n_sims):
+    return run_peeking_simulation(true_rate, n_per_group, n_looks, alpha, n_sims, seed=0)
+
+
+@st.cache_data
+def cached_fpr_curve(true_rate, n_per_group, max_looks, alpha, n_sims):
+    return peeking_fpr_curve(true_rate, n_per_group, max_looks, alpha, n_sims, seed=0)
+
+
+@st.cache_data
+def cached_cuped_demo(rho, n_users, true_effect):
+    return cuped_demo(rho, n_users, true_effect, seed=0)
 
 
 def render_ab_result(label_a, label_b, sa, na, sb, nb, alpha, alternative):
@@ -279,18 +296,135 @@ with analyze_tab:
 
 
 # --------------------------------------------------------------------------- #
-# Pitfalls tab — roadmap
+# Pitfalls tab — peeking simulator + CUPED demo  (LIVE)
 # --------------------------------------------------------------------------- #
 with pitfalls_tab:
     st.subheader("Pitfalls")
-    st.info(
-        "🚧 **Coming next.** An interactive **peeking simulator** (watch the false-positive rate inflate "
-        "when you check results early) and a **CUPED** variance-reduction demo."
+    demo = st.radio(
+        "Demo", ["Peeking / early stopping", "CUPED variance reduction"], horizontal=True, key="pit_demo"
     )
-    st.caption(
-        "CUPED is already implemented and tested in `stats/cuped.py` (`cuped_adjust`); "
-        "only this UI is pending."
-    )
+    st.divider()
+
+    if demo == "Peeking / early stopping":
+        st.markdown(
+            "Under the **null hypothesis** (A and B are truly equal), testing once gives a false-positive "
+            "rate ≈ α. But if you check repeatedly and stop the moment p < α, the chance of a false 'win' "
+            "balloons. Both groups below share the **same true rate** — every rejection is a fluke."
+        )
+        c1, c2, c3 = st.columns(3)
+        pk_rate = c1.slider("True rate (both groups)", 0.05, 0.50, 0.20, 0.01, key="pk_rate")
+        pk_n = c2.slider("Users per group", 500, 4000, 2000, 250, key="pk_n")
+        pk_looks = c3.slider("Number of looks (peeks)", 1, 20, 10, 1, key="pk_looks")
+        pk_alpha = c1.select_slider("Significance level (α)", [0.01, 0.05, 0.10], 0.05, key="pk_alpha")
+        pk_sims = c2.select_slider("Simulated experiments", [1000, 2000, 4000], 2000, key="pk_sims")
+
+        res = cached_peeking(pk_rate, pk_n, pk_looks, pk_alpha, pk_sims)
+        looks_axis, fprs = cached_fpr_curve(pk_rate, pk_n, 20, pk_alpha, pk_sims)
+
+        k1, k2, k3 = st.columns(3)
+        k1.metric("Nominal α", f"{pk_alpha:.0%}")
+        k2.metric("False-positive rate — single look", f"{res.fpr_single:.1%}")
+        k3.metric(
+            f"False-positive rate — peeking {pk_looks}×",
+            f"{res.fpr_peeking:.1%}",
+            delta=f"{res.fpr_peeking - pk_alpha:+.1%} vs α",
+            delta_color="inverse",
+        )
+
+        fig = go.Figure()
+        fig.add_scatter(x=looks_axis, y=fprs, mode="lines+markers", name="Peeking FPR", line=dict(width=3))
+        fig.add_scatter(
+            x=[pk_looks], y=[res.fpr_peeking], mode="markers",
+            marker=dict(size=13, symbol="diamond", color="#d62728"), name="Your setting",
+        )
+        fig.add_hline(y=pk_alpha, line_dash="dash", line_color="#8b949e",
+                      annotation_text=f"nominal α = {pk_alpha}")
+        fig.update_layout(
+            title="False-positive rate vs. number of looks",
+            xaxis_title="number of looks (peeks)",
+            yaxis_title="P(at least one false 'win')",
+            yaxis_tickformat=".0%", template="plotly_white", height=330,
+            margin=dict(l=10, r=10, t=50, b=10),
+        )
+        st.plotly_chart(fig, width="stretch")
+
+        fig2 = go.Figure()
+        n_ex = res.example_pvalues.shape[0]
+        for i in range(n_ex):
+            crossed = bool((res.example_pvalues[i] < pk_alpha).any())
+            fig2.add_scatter(
+                x=res.look_sizes, y=res.example_pvalues[i], mode="lines",
+                line=dict(width=1, color="rgba(214,39,39,0.55)" if crossed else "rgba(139,148,158,0.35)"),
+                showlegend=False, hoverinfo="skip",
+            )
+        fig2.add_hline(y=pk_alpha, line_dash="dash", line_color="#1b1f29",
+                       annotation_text=f"α = {pk_alpha}")
+        fig2.update_layout(
+            title=f"Running p-value of {n_ex} null experiments (red = crossed below α at some look)",
+            xaxis_title="cumulative users per group", yaxis_title="p-value",
+            template="plotly_white", height=330, margin=dict(l=10, r=10, t=50, b=10),
+        )
+        st.plotly_chart(fig2, width="stretch")
+
+        crossed_frac = float((res.example_pvalues < pk_alpha).any(axis=1).mean())
+        st.caption(
+            f"There is **no real difference**, yet {crossed_frac:.0%} of these example experiments dipped "
+            "below α at some point. Fix your sample size in advance, or use sequential-testing corrections."
+        )
+
+    else:  # CUPED
+        st.markdown(
+            "**CUPED** uses a pre-experiment covariate (e.g. each user's activity *before* the test) to "
+            "strip predictable variance from the metric — shrinking the standard error and boosting power "
+            "**without biasing** the effect estimate. The stronger the correlation, the bigger the win."
+        )
+        c1, c2, c3 = st.columns(3)
+        cp_rho = c1.slider("Corr(pre-metric, outcome) ρ", 0.0, 0.95, 0.60, 0.05, key="cp_rho")
+        cp_n = c2.slider("Users (total)", 1000, 40000, 10000, 1000, key="cp_n")
+        cp_eff = c3.slider("True treatment effect Δ", 0.0, 0.50, 0.10, 0.01, key="cp_eff")
+
+        d = cached_cuped_demo(cp_rho, cp_n, cp_eff)
+
+        k1, k2, k3, k4 = st.columns(4)
+        k1.metric("Variance removed (ρ²)", f"{d.reduction:.0%}")
+        k2.metric("SE — raw", f"{d.raw_se:.4f}")
+        k3.metric("SE — CUPED", f"{d.cuped_se:.4f}", delta=f"{d.se_ratio - 1:+.0%}", delta_color="inverse")
+        k4.metric("True effect Δ", f"{d.true_effect:.2f}")
+
+        fig = go.Figure()
+        fig.add_bar(
+            x=["Raw metric", "CUPED-adjusted"],
+            y=[d.raw_estimate, d.cuped_estimate],
+            marker_color=["#8b949e", "#5b8cff"],
+            error_y=dict(type="data", array=[1.96 * d.raw_se, 1.96 * d.cuped_se]),
+        )
+        fig.add_hline(y=d.true_effect, line_dash="dash", line_color="#3fb950",
+                      annotation_text=f"true Δ = {d.true_effect:.2f}")
+        fig.update_layout(
+            title="Treatment-effect estimate ± 95% CI",
+            yaxis_title="estimated effect", template="plotly_white", height=360,
+            margin=dict(l=10, r=10, t=50, b=10),
+        )
+        st.plotly_chart(fig, width="stretch")
+
+        st.markdown(
+            f"- Raw estimate **{d.raw_estimate:+.4f}** (95% CI ±{1.96 * d.raw_se:.4f}) · "
+            f"CUPED estimate **{d.cuped_estimate:+.4f}** (95% CI ±{1.96 * d.cuped_se:.4f}).\n"
+            f"- Both recover the true Δ = {d.true_effect:.2f}, but CUPED's interval is "
+            f"**{(1 - d.se_ratio):.0%} narrower** — the same power for fewer users.\n"
+            f"- Realized correlation CUPED exploited: ρ = {d.rho_actual:.2f} "
+            f"(theoretical SE shrink ≈ √(1 − ρ²) = {(1 - d.reduction) ** 0.5:.2f})."
+        )
+
+    with st.expander("How these are computed"):
+        st.markdown(
+            "- **Peeking:** Monte-Carlo over many simulated *null* experiments; at each look a pooled "
+            "two-proportion z-test is run on the data so far, and 'peeking' rejects if **any** look "
+            "crosses α (`stats/peeking.py`).\n"
+            "- **CUPED:** adjusts the metric to `y − θ·(x − x̄)` with `θ = cov(y, x)/var(x)`, preserving "
+            "the mean while cutting variance by `corr(x, y)²` (`stats/cuped.py`).\n"
+            "- Both modules are pure and unit-tested; the UI only renders their output."
+        )
 
 
 st.divider()

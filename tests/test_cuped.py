@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from stats.cuped import cuped_adjust, variance_reduction
+from stats.cuped import cuped_adjust, cuped_demo, variance_reduction
 
 
 def test_cuped_preserves_mean_and_reduces_variance():
@@ -49,3 +49,30 @@ def test_shape_mismatch_raises():
 def test_zero_variance_covariate_raises():
     with pytest.raises(ValueError):
         cuped_adjust(np.array([1.0, 2.0, 3.0]), np.array([5.0, 5.0, 5.0]))
+
+
+def test_cuped_demo_shrinks_se_by_sqrt_one_minus_rho_squared():
+    rho = 0.6
+    d = cuped_demo(rho, n_users=40000, true_effect=0.1, seed=0)
+    # CUPED leaves the estimate ~unbiased...
+    assert d.raw_estimate == pytest.approx(0.1, abs=0.03)
+    assert d.cuped_estimate == pytest.approx(0.1, abs=0.03)
+    # ...and shrinks the SE by ~sqrt(1 - rho^2).
+    assert d.se_ratio == pytest.approx(np.sqrt(1 - rho**2), abs=0.03)
+    assert d.cuped_se < d.raw_se
+    assert d.reduction == pytest.approx(rho**2, abs=0.02)
+    assert d.var_y_cuped < d.var_y
+
+
+def test_cuped_demo_zero_correlation_no_reduction():
+    d = cuped_demo(0.0, n_users=20000, true_effect=0.1, seed=1)
+    assert d.reduction < 0.01
+    assert d.se_ratio == pytest.approx(1.0, abs=0.03)
+
+
+@pytest.mark.parametrize("kwargs", [{"rho": 1.0}, {"rho": -0.1}, {"n_users": 2}])
+def test_cuped_demo_invalid_inputs_raise(kwargs):
+    base = dict(rho=0.5, n_users=1000)
+    base.update(kwargs)
+    with pytest.raises(ValueError):
+        cuped_demo(**base)

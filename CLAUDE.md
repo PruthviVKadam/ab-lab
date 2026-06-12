@@ -9,14 +9,15 @@ Streamlit app for designing & analyzing A/B tests. Tabs: Design / Analyze / Pitf
 
 ## Structure
 - app.py — UI only, no statistics inline (a thin render helper that calls pure stats is OK)
-- stats/power.py · stats/tests.py · stats/aggregate.py · stats/cuped.py — pure functions, fully unit-tested
+- stats/power.py · stats/tests.py · stats/aggregate.py · stats/cuped.py · stats/peeking.py — pure functions, fully unit-tested
 - tests/ — pytest suite (cross-checked vs statsmodels / hand-computed oracles)
 - data/cookie_cats.csv — BUNDLED (90,189 rows; committed with `git add -f`; never modify). See data/README.md.
 
 ## Status
 - Design tab: LIVE (sample-size calculator + sensitivity curve).
 - Analyze tab: LIVE (Cookie Cats bundled / CSV upload / manual counts → two-proportion z-test, CI, verdict).
-- Pitfalls tab: UI roadmap; CUPED stats (cuped_adjust) already implemented and tested.
+- Pitfalls tab: LIVE (peeking/early-stopping Monte-Carlo simulator + CUPED variance-reduction demo).
+- All three tabs shipped. Next candidates: sequential-testing correction, more datasets, deeper power tooling.
 
 ## Rules
 - Every test function docstring states H0, H1, assumptions, and when the test is INVALID.
