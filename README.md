@@ -19,6 +19,18 @@ theory into something you can drive live.
 - **Result:** Every statistic is a pure, unit-tested function cross-checked against statsmodels
   and hand-computed values — so the numbers on screen are trustworthy.
 
+## Insights
+
+- **A "significant" result can argue *against* shipping.** Moving the gate to level 40 produced a
+  statistically significant **drop** in 7-day retention (18.20% vs 19.02%, p = 0.00155) — the right
+  call was *don't ship*. Significance is direction-agnostic; the business reading is everything.
+- **Peeking is the silent killer.** Checking a test repeatedly and stopping at the first p < 0.05
+  turns a 5% false-positive rate into **~24% at 20 looks** — many "wins" from unmonitored dashboards
+  are noise.
+- **Variance reduction beats a bigger sample.** A pre-experiment covariate (CUPED) cuts the standard
+  error by ~√(1−ρ²) at zero bias — ρ = 0.9 gives a ~56% smaller SE, i.e. the same power for a
+  fraction of the traffic.
+
 ## Current status (honest)
 
 | Tab | State |
