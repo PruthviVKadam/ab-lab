@@ -14,9 +14,11 @@ from stats.aggregate import available_groups, summarize_binary_experiment
 from stats.cuped import cuped_demo
 from stats.peeking import peeking_fpr_curve, run_peeking_simulation
 from stats.power import power_for_sample_size, required_sample_size, sensitivity_curve
+from brand import apply_brand
 from stats.tests import proportion_ci, two_proportion_ztest
 
 st.set_page_config(page_title="Experimentation Lab", page_icon="🧪", layout="wide")
+apply_brand()
 
 st.title("🧪 Experimentation Lab")
 st.caption("Design and analyze A/B tests — power analysis, peeking pitfalls, and variance reduction.")
